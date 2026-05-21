@@ -152,6 +152,19 @@ sensor:
               id(script_update_media)->execute();
             }
           }
+      - if:
+          condition:
+            lambda: 'return id(current_page) == 3;'
+          then:
+            - lvgl.arc.update:
+                id: control_arc
+                value: !lambda 'return id(control_value);'
+            - lvgl.label.update:
+                id: control_value_label
+                text: !lambda |-
+                  static char buf[16];
+                  sprintf(buf, "%d%%", id(control_value));
+                  return buf;
     on_anticlockwise:
       - lambda: |-
           if (id(current_page) == 0) {
@@ -169,6 +182,19 @@ sensor:
               id(script_update_media)->execute();
             }
           }
+      - if:
+          condition:
+            lambda: 'return id(current_page) == 3;'
+          then:
+            - lvgl.arc.update:
+                id: control_arc
+                value: !lambda 'return id(control_value);'
+            - lvgl.label.update:
+                id: control_value_label
+                text: !lambda |-
+                  static char buf[16];
+                  sprintf(buf, "%d%%", id(control_value));
+                  return buf;
 
 binary_sensor:
   - platform: gpio
