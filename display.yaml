@@ -114,6 +114,9 @@ globals:
   - id: current_page
     type: int
     initial_value: "0" # 0: Main, 1: Lights, 2: Media, 3: Control
+  - id: selected_menu_item
+    type: int
+    initial_value: "0"
   - id: selected_entity_type
     type: int
     initial_value: "0" # 0: None, 1: Light, 2: Media
@@ -130,23 +133,39 @@ sensor:
     resolution: 1
     on_clockwise:
       - lambda: |-
-          if (id(current_page) == 3) {
+          if (id(current_page) == 0) {
+            id(selected_menu_item) = 1;
+            id(script_update_menu_highlight)->execute();
+          } else if (id(current_page) == 1) {
+            // we only have 1 entity and a back button for lights
+            id(selected_menu_item) = (id(selected_menu_item) == 0) ? 1 : 0;
+            // update focus (not fully implemented visual highlight here yet)
+          } else if (id(current_page) == 2) {
+            // we only have 1 entity and a back button for media
+            id(selected_menu_item) = (id(selected_menu_item) == 0) ? 1 : 0;
+            // update focus (not fully implemented visual highlight here yet)
+          } else if (id(current_page) == 3) {
             id(control_value) = std::min(id(control_value) + 5, 100);
             if (id(selected_entity_type) == 1) {
               id(script_update_light)->execute();
             } else if (id(selected_entity_type) == 2) {
-
               id(script_update_media)->execute();
             }
           }
     on_anticlockwise:
       - lambda: |-
-          if (id(current_page) == 3) {
+          if (id(current_page) == 0) {
+            id(selected_menu_item) = 0;
+            id(script_update_menu_highlight)->execute();
+          } else if (id(current_page) == 1) {
+            id(selected_menu_item) = (id(selected_menu_item) == 0) ? 1 : 0;
+          } else if (id(current_page) == 2) {
+            id(selected_menu_item) = (id(selected_menu_item) == 0) ? 1 : 0;
+          } else if (id(current_page) == 3) {
             id(control_value) = std::max(id(control_value) - 5, 0);
             if (id(selected_entity_type) == 1) {
               id(script_update_light)->execute();
             } else if (id(selected_entity_type) == 2) {
-
               id(script_update_media)->execute();
             }
           }
@@ -165,6 +184,73 @@ binary_sensor:
     on_press:
       - if:
           condition:
+            lambda: 'return id(current_page) == 0;'
+          then:
+            - if:
+                condition:
+                  lambda: 'return id(selected_menu_item) == 0;'
+                then:
+                  - lambda: 'id(current_page) = 1;'
+                  - lvgl.page.show: page_lights
+                else:
+                  - lambda: 'id(current_page) = 2;'
+                  - lvgl.page.show: page_media
+      - if:
+          condition:
+            lambda: 'return id(current_page) == 1;'
+          then:
+            - if:
+                condition:
+                  lambda: 'return id(selected_menu_item) == 0;'
+                then:
+                  - lambda: |-
+                      id(selected_entity_type) = 1;
+                      id(current_page) = 3;
+                  - lvgl.label.update:
+                      id: control_title
+                      text: "Brightness"
+                  - lvgl.arc.update:
+                      id: control_arc
+                      value: !lambda 'return id(control_value);'
+                  - lvgl.label.update:
+                      id: control_value_label
+                      text: !lambda |-
+                        static char buf[16];
+                        sprintf(buf, "%d%%", id(control_value));
+                        return buf;
+                  - lvgl.page.show: page_control
+                else:
+                  - lambda: 'id(current_page) = 0;'
+                  - lvgl.page.show: page_main
+      - if:
+          condition:
+            lambda: 'return id(current_page) == 2;'
+          then:
+            - if:
+                condition:
+                  lambda: 'return id(selected_menu_item) == 0;'
+                then:
+                  - lambda: |-
+                      id(selected_entity_type) = 2;
+                      id(current_page) = 3;
+                  - lvgl.label.update:
+                      id: control_title
+                      text: "Volume"
+                  - lvgl.arc.update:
+                      id: control_arc
+                      value: !lambda 'return id(control_value);'
+                  - lvgl.label.update:
+                      id: control_value_label
+                      text: !lambda |-
+                        static char buf[16];
+                        sprintf(buf, "%d%%", id(control_value));
+                        return buf;
+                  - lvgl.page.show: page_control
+                else:
+                  - lambda: 'id(current_page) = 0;'
+                  - lvgl.page.show: page_main
+      - if:
+          condition:
             lambda: 'return id(current_page) == 3;'
           then:
             - if:
@@ -178,6 +264,25 @@ binary_sensor:
                   - lvgl.page.show: page_media
 
 script:
+  - id: script_update_menu_highlight
+    then:
+      - if:
+          condition:
+            lambda: 'return id(selected_menu_item) == 0;'
+          then:
+            - lvgl.widget.update:
+                id: btn_lights
+                bg_color: 0x555555
+            - lvgl.widget.update:
+                id: btn_media
+                bg_color: 0x333333
+          else:
+            - lvgl.widget.update:
+                id: btn_lights
+                bg_color: 0x333333
+            - lvgl.widget.update:
+                id: btn_media
+                bg_color: 0x555555
   - id: script_update_light
     then:
       - homeassistant.service:
@@ -219,11 +324,13 @@ font:
 lvgl:
   displays:
     - main_display
+
+
   color_depth: 16
   buffer_size: 25%
   pages:
     - id: page_main
-      bg_color: 0x000000
+      bg_color: 0x1E1E1E
       widgets:
         - label:
             align: TOP_MID
@@ -232,11 +339,13 @@ lvgl:
             text_color: 0xFFFFFF
             text_font: font_24
         - button:
+            id: btn_lights
             align: CENTER
             y: -20
             width: 140
             height: 40
             bg_color: 0x333333
+            radius: 20
             widgets:
               - label:
                   align: CENTER
@@ -247,11 +356,13 @@ lvgl:
               - lambda: 'id(current_page) = 1;'
               - lvgl.page.show: page_lights
         - button:
+            id: btn_media
             align: CENTER
             y: 40
             width: 140
             height: 40
             bg_color: 0x333333
+            radius: 20
             widgets:
               - label:
                   align: CENTER
@@ -262,7 +373,7 @@ lvgl:
               - lambda: 'id(current_page) = 2;'
               - lvgl.page.show: page_media
     - id: page_lights
-      bg_color: 0x000000
+      bg_color: 0x1E1E1E
       widgets:
         - label:
             align: TOP_MID
@@ -272,10 +383,11 @@ lvgl:
             text_font: font_24
         - button:
             align: CENTER
-            y: -20
-            width: 160
+            y: -10
+            width: 180
             height: 40
             bg_color: 0x333333
+            radius: 20
             widgets:
               - label:
                   align: CENTER
@@ -301,10 +413,11 @@ lvgl:
               - lvgl.page.show: page_control
         - button:
             align: BOTTOM_MID
-            y: -30
+            y: -20
             width: 100
             height: 40
             bg_color: 0x550000
+            radius: 15
             widgets:
               - label:
                   align: CENTER
@@ -316,7 +429,7 @@ lvgl:
               - lvgl.page.show: page_main
 
     - id: page_media
-      bg_color: 0x000000
+      bg_color: 0x1E1E1E
       widgets:
         - label:
             align: TOP_MID
@@ -326,10 +439,11 @@ lvgl:
             text_font: font_24
         - button:
             align: CENTER
-            y: -20
-            width: 160
+            y: -10
+            width: 180
             height: 40
             bg_color: 0x333333
+            radius: 20
             widgets:
               - label:
                   align: CENTER
@@ -355,10 +469,11 @@ lvgl:
               - lvgl.page.show: page_control
         - button:
             align: BOTTOM_MID
-            y: -30
+            y: -20
             width: 100
             height: 40
             bg_color: 0x550000
+            radius: 15
             widgets:
               - label:
                   align: CENTER
@@ -369,7 +484,7 @@ lvgl:
               - lambda: 'id(current_page) = 0;'
               - lvgl.page.show: page_main
     - id: page_control
-      bg_color: 0x000000
+      bg_color: 0x1E1E1E
       widgets:
         - label:
             id: control_title
@@ -408,6 +523,7 @@ lvgl:
             width: 80
             height: 30
             bg_color: 0x550000
+            radius: 15
             widgets:
               - label:
                   align: CENTER
